@@ -13,10 +13,207 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ===== Enums =====
+
+enum TripStatus {
+  IMPORTED
+  PROCESSED
+}
+
+enum CreditStatus {
+  AVAILABLE
+  LISTED
+  SOLD
+  RETIRED
+}
+
+enum ListingType {
+  FIXED
+  AUCTION
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD_OUT
+  CANCELLED
+  ENDED
+}
+
+enum BidStatus {
+  ACTIVE
+  OUTBID
+  CANCELLED
+  ACCEPTED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum LedgerType {
+  CREDIT_MINT
+  SALE_PROCEEDS
+  PURCHASE
+  FEE
+  WITHDRAWAL
+  DEPOSIT
+  PAYOUT
+}
+
+enum PayoutStatus {
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ===== Models =====
+
 model User {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
-  email     String   @unique
+  email     String    @unique
   password  String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+
+  // Relations
+  trips           Trip[]
+  creditLots      CreditLot[]
+  wallet          Wallet?
+  ledgerEntries   LedgerEntry[]
+  listings        Listing[]       @relation("UserListings")
+  bids            Bid[]
+  transactionsBuy Transaction[]   @relation("TransactionsAsBuyer")
+  transactionsSell Transaction[]  @relation("TransactionsAsSeller")
+  payouts         Payout[]
+}
+
+model Trip {
+  id              Int        @id @default(autoincrement())
+  userId          Int
+  sourceFileName  String?
+  startAt         DateTime?
+  endAt           DateTime?
+  distanceKm      Decimal    @default(0) @db.Decimal(18, 3)
+  energyKWh       Decimal    @default(0) @db.Decimal(18, 3)
+  co2ReducedKg    Decimal    @default(0) @db.Decimal(18, 3)
+  status          TripStatus @default(IMPORTED)
+  createdAt       DateTime   @default(now())
+
+  user       User       @relation(fields: [userId], references: [id])
+  creditLots CreditLot[]
+
+  @@index([userId, createdAt])
+}
+
+model CreditLot {
+  id               Int         @id @default(autoincrement())
+  userId           Int
+  tripId           Int?
+  credits          Decimal     @default(0) @db.Decimal(18, 6)
+  availableCredits Decimal     @default(0) @db.Decimal(18, 6)
+  status           CreditStatus @default(AVAILABLE)
+  mintedAt         DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  trip Trip? @relation(fields: [tripId], references: [id])
+  listings Listing[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Wallet {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique
+  balanceCents Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model LedgerEntry {
+  id           Int        @id @default(autoincrement())
+  userId       Int
+  type         LedgerType
+  amountCents  Int        @default(0)
+  creditsDelta Decimal    @default(0) @db.Decimal(18, 6)
+  reference    String?
+  createdAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model Listing {
+  id                      Int            @id @default(autoincrement())
+  userId                  Int
+  creditLotId             Int
+  type                    ListingType
+  status                  ListingStatus  @default(ACTIVE)
+  quantity                Decimal        @db.Decimal(18, 6)
+  pricePerCreditCents     Int?
+  minPricePerCreditCents  Int?
+  startAt                 DateTime       @default(now())
+  endAt                   DateTime?
+
+  user      User      @relation("UserListings", fields: [userId], references: [id])
+  creditLot CreditLot  @relation(fields: [creditLotId], references: [id])
+  bids      Bid[]
+  trades    Transaction[]
+
+  @@index([status])
+  @@index([type])
+  @@index([userId])
+}
+
+model Bid {
+  id                   Int        @id @default(autoincrement())
+  listingId            Int
+  userId               Int
+  pricePerCreditCents  Int
+  quantity             Decimal    @db.Decimal(18, 6)
+  status               BidStatus  @default(ACTIVE)
+  createdAt            DateTime   @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([listingId])
+  @@index([userId])
+}
+
+model Transaction {
+  id                  Int                @id @default(autoincrement())
+  listingId           Int
+  buyerId             Int
+  sellerId            Int
+  quantity            Decimal            @db.Decimal(18, 6)
+  pricePerCreditCents Int
+  totalCents          Int
+  status              TransactionStatus  @default(PENDING)
+  createdAt           DateTime           @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id])
+  buyer   User    @relation("TransactionsAsBuyer", fields: [buyerId], references: [id])
+  seller  User    @relation("TransactionsAsSeller", fields: [sellerId], references: [id])
+
+  @@index([buyerId])
+  @@index([sellerId])
+}
+
+model Payout {
+  id          Int          @id @default(autoincrement())
+  userId      Int
+  amountCents Int
+  status      PayoutStatus @default(REQUESTED)
+  createdAt   DateTime     @default(now())
+
+  user        User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
