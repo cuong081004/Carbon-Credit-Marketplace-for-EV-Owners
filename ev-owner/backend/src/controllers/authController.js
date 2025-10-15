@@ -1,8 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../prisma/client.js";
 
 // Đăng ký người dùng
 export const register = async (req, res) => {
@@ -16,6 +14,7 @@ export const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await prisma.user.create({
       data: { email, password: hashedPassword, name },
+      select: { id: true, name: true, email: true, createdAt: true },
     });
 
     res.status(201).json({ message: "Đăng ký thành công", user: newUser });
