@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from "./routes/userRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
@@ -8,6 +9,7 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 // ✅ Route kiểm tra server
 app.get('/api/health', (req, res) => {
